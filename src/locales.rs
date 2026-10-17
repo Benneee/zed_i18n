@@ -1,6 +1,27 @@
 use anyhow::Result;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+
+pub fn load_locale_file(path: &str) -> Result<BTreeMap<String, String>> {
+    let text = fs::read_to_string(path)?;
+    process_json(&text)
+}
+
+pub fn load_file_name(path: &str) -> Option<String> {
+    let file_path = Path::new(path);
+    match file_path.file_stem() {
+        Some(file_name_text) => {
+            eprintln!("{:?}", file_name_text);
+            Some(file_name_text.to_string_lossy().to_string())
+        }
+        None => {
+            eprintln!("Nothing to see here");
+            None
+        }
+    }
+}
 
 pub fn process_json(copies_json: &str) -> Result<BTreeMap<String, String>> {
     // Parse the JSON string
