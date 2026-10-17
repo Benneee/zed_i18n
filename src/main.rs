@@ -1,4 +1,7 @@
 mod cursor;
+mod locales;
+
+use std::collections::BTreeMap;
 
 use dashmap::DashMap;
 use tower_lsp_server::jsonrpc::Result;
@@ -9,13 +12,42 @@ use tower_lsp_server::{Client, LanguageServer, LspService, Server};
 struct Backend {
     client: Client,
     documents: DashMap<String, String>,
+    // I want to save a copy of the translation files on initialization here
+    // BTreeMap ensures the copy keys are in the same sorted alphabetical order everytime I have to check
+    // The structure from outside looking in is:
+    // Dashmap<String, ...> => language name ("en")
+    // BTreeMap<String, String> => the copy key ("app.welcome")
+    // Usage: self.copies.get(lang) provides the english copies and then, the list .get(copy_key) gives the text ("Welcome")
+    copies: DashMap<String, BTreeMap<String, String>>,
 }
 
 impl Backend {
     fn new(client: Client) -> Self {
+        let copies: DashMap<String, BTreeMap<String, String>> = DashMap::new();
+        // String copies to test with
+        let copies_json = r#"{
+            "app" : {
+                "login": {
+                    "button": "Submit",
+                    "title": "Sign in"
+                },
+                 "welcome" : "Welcome"
+               }
+            }"#;
+
+        match locales::process_json(copies_json) {
+            Ok(table) => {
+                copies.insert("en".to_string(), table);
+            }
+            Err(e) => eprintln!("failed to load locales: {e}"),
+        }
+
+        eprintln!("{:?}", copies);
+
         Self {
             client,
             documents: DashMap::new(),
+            copies,
             // I will add a method to call the copy extraction bit here
             // copies_provider: <the name of the library for the copies here>
         }
@@ -71,7 +103,7 @@ impl LanguageServer for Backend {
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         if let Some(change) = params.content_changes.into_iter().next() {
             let uri = params.text_document.uri.to_string();
-            self.documents.insert(uri, change.text.clone());
+            self.documents.insert(uri, change.text);
         }
     }
 
