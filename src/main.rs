@@ -24,25 +24,25 @@ struct Backend {
 impl Backend {
     fn new(client: Client) -> Self {
         let copies: DashMap<String, BTreeMap<String, String>> = DashMap::new();
-        // String copies to test with
-        let copies_json = r#"{
-            "app" : {
-                "login": {
-                    "button": "Submit",
-                    "title": "Sign in"
-                },
-                 "welcome" : "Welcome"
-               }
-            }"#;
 
-        match locales::process_json(copies_json) {
+        let locales_path = "test-fixtures/locales/en.json";
+
+        let Some(lang) = locales::load_file_name(locales_path) else {
+            eprintln!("couldn't get a language from {locales_path}");
+            return Self {
+                client,
+                documents: DashMap::new(),
+                copies,
+            };
+        };
+
+        match locales::load_locale_file(locales_path) {
             Ok(table) => {
-                copies.insert("en".to_string(), table);
+                copies.insert(lang, table);
+                eprintln!("{:?}", copies);
             }
-            Err(e) => eprintln!("failed to load locales: {e}"),
+            Err(e) => eprintln!("failed to load locales {e}"),
         }
-
-        eprintln!("{:?}", copies);
 
         Self {
             client,

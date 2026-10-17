@@ -1,0 +1,9 @@
+{
+  "app": {
+    "login": {
+      "button": "Submit",
+      "title": "Sign in"
+    },
+    "welcome": "Welcome"
+  }
+}
