@@ -1,0 +1,9 @@
+{
+  "app": {
+    "login": {
+      "button": "Valider",
+      "title": "Se connecter"
+    },
+    "welcome": "Bienvenue"
+  }
+}

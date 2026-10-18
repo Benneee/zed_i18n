@@ -25,36 +25,25 @@ impl Backend {
     fn new(client: Client) -> Self {
         let copies: DashMap<String, BTreeMap<String, String>> = DashMap::new();
 
-        let locales_path = "test-fixtures/locales/en.json";
+        // Load every locale file in the folder
+        let locales_directory = "test-fixtures/locales";
+        match locales::load_files(locales_directory) {
+            Ok(locales) => {
+                for (lang, table) in locales {
+                    copies.insert(lang, table);
+                }
 
-        let Some(lang) = locales::load_file_name(locales_path) else {
-            eprintln!("couldn't get a language from {locales_path}");
-            return Self {
-                client,
-                documents: DashMap::new(),
-                copies,
-            };
-        };
-
-        match locales::load_locale_file(locales_path) {
-            Ok(table) => {
-                copies.insert(lang, table);
-                eprintln!("{:?}", copies);
+                eprintln!("{:?}", copies)
             }
-            Err(e) => eprintln!("failed to load locales {e}"),
+            Err(e) => eprintln!("{e}"),
         }
 
         Self {
             client,
             documents: DashMap::new(),
             copies,
-            // I will add a method to call the copy extraction bit here
-            // copies_provider: <the name of the library for the copies here>
         }
     }
-
-    // The functionality consumed from the copies extraction after the hover will go here
-    // async fn provide_copies() {...}
 }
 
 impl LanguageServer for Backend {
@@ -94,6 +83,7 @@ impl LanguageServer for Backend {
     }
 
     // User opens a file in the text editor and after the extension initialises,
+    // we load the current file's content into documents for quick reference
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri.to_string();
         self.documents.insert(uri, params.text_document.text);
