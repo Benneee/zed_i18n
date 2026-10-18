@@ -36,7 +36,6 @@ impl Backend {
 
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        // eprintln!("workspace: {:?}", params.workspace_folders);
         // Load every locale file in the folder
         let locales_directory = "test-fixtures/locales";
 
@@ -49,9 +48,9 @@ impl LanguageServer for Backend {
                         self.copies.insert(lang, table);
                     }
 
-                    eprintln!("{:?}", self.copies)
+                    // eprintln!("{:?}", self.copies)
                 }
-                Err(e) => eprintln!("failed to load translation files{e}"),
+                Err(e) => eprintln!("failed to load translation files: {e}"),
             }
         }
 
@@ -122,14 +121,41 @@ impl LanguageServer for Backend {
         };
 
         // Nothing in the position? Nothing to show
-        let Some(word) = cursor::get_word_at_position(&file_content, position) else {
+        let Some(copy_key) = cursor::get_word_at_position(&file_content, position) else {
             return Ok(None);
         };
+        // Dashmap's content always returns randomly when looping through
+        // Need to sort the content but because of the shard locks typical with Dashmap,
+        // I need to clone the content and use accordingly
+        let mut sorted_vec_copies: Vec<(String, Option<String>)> = self
+            .copies
+            .iter()
+            // Here, we don't want to go over all the copies to find the word for our hovered copy_key
+            // so, we use get to find it and move forward
+            .map(|entry| (entry.key().clone(), entry.value().get(copy_key).cloned()))
+            .collect();
+        // Here, the sorting is done by key, which in this case will be the language
+        sorted_vec_copies.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+        let mut markdown = format!("**{copy_key}**\n");
+        let mut found_a_copy = false;
+        // Here, we assemble the copies for the key as they match our hovered copy_key
+        for (lang, text) in sorted_vec_copies {
+            if let Some(text) = text {
+                found_a_copy = true;
+                markdown.push_str(&format!("- {lang}: {text}\n"));
+            }
+        }
+
+        if !found_a_copy {
+            return Ok(None);
+        }
 
         Ok(Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: format!("**{word}**"),
+                // Now, the zed popup shows the assembled copies generated above
+                value: markdown,
             }),
             range: None,
         }))
@@ -142,7 +168,6 @@ impl LanguageServer for Backend {
 // Returns None if there's no workspace folder or the URI isn't a file path.
 // Note: this only builds the path. It doesn't check that the folder exists;
 // `locales::load_files` will report an error if it doesn't.
-
 fn locales_dir_path(
     workspace_folders: Option<Vec<WorkspaceFolder>>,
     locales_directory: &str,
