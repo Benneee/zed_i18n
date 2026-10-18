@@ -2,6 +2,7 @@ mod cursor;
 mod locales;
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use dashmap::DashMap;
 use tower_lsp_server::jsonrpc::Result;
@@ -25,19 +26,6 @@ impl Backend {
     fn new(client: Client) -> Self {
         let copies: DashMap<String, BTreeMap<String, String>> = DashMap::new();
 
-        // Load every locale file in the folder
-        let locales_directory = "test-fixtures/locales";
-        match locales::load_files(locales_directory) {
-            Ok(locales) => {
-                for (lang, table) in locales {
-                    copies.insert(lang, table);
-                }
-
-                eprintln!("{:?}", copies)
-            }
-            Err(e) => eprintln!("{e}"),
-        }
-
         Self {
             client,
             documents: DashMap::new(),
@@ -47,7 +35,26 @@ impl Backend {
 }
 
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        // eprintln!("workspace: {:?}", params.workspace_folders);
+        // Load every locale file in the folder
+        let locales_directory = "test-fixtures/locales";
+
+        // params.workspace_folders is the user's project that Zed provides to us via the lsp's initialize lifecycle
+        let workspace_locales = locales_dir_path(params.workspace_folders, locales_directory);
+        if let Some(dir) = workspace_locales {
+            match locales::load_files(&dir) {
+                Ok(locales) => {
+                    for (lang, table) in locales {
+                        self.copies.insert(lang, table);
+                    }
+
+                    eprintln!("{:?}", self.copies)
+                }
+                Err(e) => eprintln!("failed to load translation files{e}"),
+            }
+        }
+
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Options(
@@ -127,6 +134,23 @@ impl LanguageServer for Backend {
             range: None,
         }))
     }
+}
+
+// Builds the path to the locales folder inside the user's project.
+// Takes the first workspace folder Zed sends in `initialize`, turns its
+// URI (file:///...) into a normal path, and joins `locales_directory` onto it.
+// Returns None if there's no workspace folder or the URI isn't a file path.
+// Note: this only builds the path. It doesn't check that the folder exists;
+// `locales::load_files` will report an error if it doesn't.
+
+fn locales_dir_path(
+    workspace_folders: Option<Vec<WorkspaceFolder>>,
+    locales_directory: &str,
+) -> Option<PathBuf> {
+    let folders = workspace_folders?;
+    let folder = folders.first()?;
+    let root = folder.uri.to_file_path()?;
+    Some(root.join(locales_directory))
 }
 
 #[tokio::main]

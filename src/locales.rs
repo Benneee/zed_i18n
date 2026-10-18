@@ -19,7 +19,7 @@ fn load_file_name(path: &Path) -> Option<String> {
     }
 }
 
-pub fn load_files(directory: &str) -> Result<BTreeMap<String, BTreeMap<String, String>>> {
+pub fn load_files(directory: &Path) -> Result<BTreeMap<String, BTreeMap<String, String>>> {
     let entries = fs::read_dir(directory)?;
     let mut copies: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
 
