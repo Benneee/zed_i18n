@@ -27,8 +27,17 @@ fn utf16_to_byte_offset(line: &str, utf16_col: usize) -> Option<usize> {
     }
 }
 
-// Things are private to their files unless marked with pub
-pub fn get_word_at_position(content: &str, position: Position) -> Option<&str> {
+// Represents the following:
+// word: the hovered copy key
+// before: the opening parts of the copy key container
+// end: the terminating part of the copy key container
+pub struct WordContext {
+    pub word: String,
+    pub before: String,
+    pub after: String,
+}
+
+pub fn get_word_with_surroundings(content: &str, position: Position) -> Option<WordContext> {
     // The line the user is hovering over
     let line_text = match content.lines().nth(position.line as usize) {
         Some(line) => line,
@@ -54,16 +63,87 @@ pub fn get_word_at_position(content: &str, position: Position) -> Option<&str> {
         .find(|&(_, c)| !is_key_char(c))
         .map(|(idx, c)| idx + c.len_utf8()) // word starts after that character
         .unwrap_or(0);
+    eprintln!("start text: {}", &line_text[..start]);
 
     // End: walk forwards to the first non-key character
     let end = line_text[cursor..]
         .find(|c: char| !is_key_char(c))
         .map(|idx| cursor + idx)
         .unwrap_or(line_text.len());
+    eprintln!("end text: {}", &line_text[end..]);
 
     if start < end {
-        Some(&line_text[start..end])
+        let result = WordContext {
+            word: line_text[start..end].to_string(),
+            before: line_text[..start].to_string(),
+            after: line_text[end..].to_string(),
+        };
+
+        Some(result)
     } else {
         None
     }
+}
+
+// Text that comes right before the opening quote of a translation key
+const CALL_OPENINGS: &[&str] = &[
+    "t(", // t("…"), i18n.t("…"), this.intl.t("…"), $t("…")  (i18next, next-intl, vue-i18n, ember-intl in JS)
+    "tc(", // $tc("…")                     (vue-i18n v8, plurals)
+    "_(", // $_("…")                      (svelte-i18n)
+    "instant(", // translate.instant("…")       (ngx-translate, in TS code)
+    "formatMessage({ id: ", // intl.formatMessage({ id: "…" })  (react-intl)
+    "formatMessage({id:", // same, without spaces
+    "{{t ", // {{t "…"}}                    (ember-intl templates)
+    "(t ", // (t "…")                      (ember-intl sub-expression)
+    "i18nKey=", // <Trans i18nKey="…">          (react-i18next)
+    "v-t=\"", // v-t="'…'"                    (vue-i18n directive)
+    "<FormattedMessage id=", // <FormattedMessage id="…">    (react-intl component)
+];
+
+// The quotes a key can be wrapped in
+const QUOTES: [char; 3] = ['"', '\'', '`'];
+
+// Angular-style pipes: 'app.welcome' | translate
+const PIPE_NAMES: &[&str] = &["translate", "transloco"];
+
+// Is the word between `before` and `after` a translation key?
+pub fn is_translation_call(before: &str, after: &str) -> bool {
+    // 1. The key must sit between two matching quotes
+    let Some(quote) = before.chars().last() else {
+        return false;
+    };
+    if !QUOTES.contains(&quote) || !after.starts_with(quote) {
+        return false;
+    }
+
+    // The test on each side, without the quotes
+    let before_quote = &before[..before.len() - quote.len_utf8()]; // e.g `const a = t(`
+    let after_quote = &after[quote.len_utf8()..]; // e.g `);`
+
+    // 2. Call style: t("..."), $t("..."), {{t "..."}}, ...e.t.c
+    for opening in CALL_OPENINGS {
+        if let Some(rest) = before_quote.strip_suffix(opening) {
+            // Stop get("...") and split ("...") from matching "t(";
+            // the character before the opening cannot be a letter, digit, or ...
+            let part_to_a_word = matches!(
+                rest.chars().last(),
+                Some(c) if c.is_alphanumeric() || c == '_'
+            );
+            if !part_to_a_word {
+                return true;
+            }
+        }
+    }
+
+    // Angular with the pipe :) style: 'app.welcome' | translate
+    if let Some(rest) = after_quote.trim_start().strip_prefix('|') {
+        let rest = rest.trim_start();
+        for pipe in PIPE_NAMES {
+            if rest.starts_with(pipe) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
