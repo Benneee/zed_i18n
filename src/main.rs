@@ -121,9 +121,16 @@ impl LanguageServer for Backend {
         };
 
         // Nothing in the position? Nothing to show
-        let Some(copy_key) = cursor::get_word_at_position(&file_content, position) else {
+        let Some(word_context) = cursor::get_word_with_surroundings(&file_content, position) else {
             return Ok(None);
         };
+        let copy_key = word_context.word;
+        let before_copy_key = word_context.before;
+        let after_copy_key = word_context.after;
+
+        if !cursor::is_translation_call(&before_copy_key, &after_copy_key) {
+            return Ok(None);
+        }
         // Dashmap's content always returns randomly when looping through
         // Need to sort the content but because of the shard locks typical with Dashmap,
         // I need to clone the content and use accordingly
@@ -132,7 +139,7 @@ impl LanguageServer for Backend {
             .iter()
             // Here, we don't want to go over all the copies to find the word for our hovered copy_key
             // so, we use get to find it and move forward
-            .map(|entry| (entry.key().clone(), entry.value().get(copy_key).cloned()))
+            .map(|entry| (entry.key().clone(), entry.value().get(&copy_key).cloned()))
             .collect();
         // Here, the sorting is done by key, which in this case will be the language
         sorted_vec_copies.sort_unstable_by(|a, b| a.0.cmp(&b.0));
