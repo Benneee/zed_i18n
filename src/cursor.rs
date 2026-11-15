@@ -63,14 +63,12 @@ pub fn get_word_with_surroundings(content: &str, position: Position) -> Option<W
         .find(|&(_, c)| !is_key_char(c))
         .map(|(idx, c)| idx + c.len_utf8()) // word starts after that character
         .unwrap_or(0);
-    eprintln!("start text: {}", &line_text[..start]);
 
     // End: walk forwards to the first non-key character
     let end = line_text[cursor..]
         .find(|c: char| !is_key_char(c))
         .map(|idx| cursor + idx)
         .unwrap_or(line_text.len());
-    eprintln!("end text: {}", &line_text[end..]);
 
     if start < end {
         let result = WordContext {
