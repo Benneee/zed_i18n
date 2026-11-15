@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn guards_on_utf_characters() {
-        // The emoji counts as 2 LSP characters, so "app.welcome" starts at 15
+        // The emoji counts as 2 LSP characters, so "app.welcome" starts at 8
         let emoji_content = "🎉 + t(\"app.welcome\");\n";
         let after_emoji = Position {
             line: 0,

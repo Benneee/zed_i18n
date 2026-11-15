@@ -68,8 +68,6 @@ impl LanguageServer for Backend {
                         for (lang, table) in locales {
                             self.copies.insert(lang, table);
                         }
-
-                        // eprintln!("{:?}", self.copies)
                     }
                     Err(e) => eprintln!("failed to load translation files: {e}"),
                 }
