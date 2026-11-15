@@ -45,7 +45,6 @@ const LOCALE_DIRS: &[&str] = &[
     "locales",
     "i18n",
     "lang",
-    "test-fixtures/locales", // only for testing with scripts/test_lsp.py
 ];
 
 impl LanguageServer for Backend {
