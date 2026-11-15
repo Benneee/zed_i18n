@@ -34,23 +34,46 @@ impl Backend {
     }
 }
 
+// Folders where projects usually keep their translation files, checked in order.
+// The first one that exists in the user's project is used.
+const LOCALE_DIRS: &[&str] = &[
+    "public/locales", // react-i18next
+    "src/locales",    // vue-i18n
+    "src/i18n",
+    "src/assets/i18n", // Angular (ngx-translate)
+    "translations",    // ember-intl
+    "locales",
+    "i18n",
+    "lang",
+    "test-fixtures/locales", // only for testing with scripts/test_lsp.py
+];
+
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        // Load every locale file in the folder
-        let locales_directory = "test-fixtures/locales";
-
         // params.workspace_folders is the user's project that Zed provides to us via the lsp's initialize lifecycle
-        let workspace_locales = locales_dir_path(params.workspace_folders, locales_directory);
-        if let Some(dir) = workspace_locales {
-            match locales::load_files(&dir) {
-                Ok(locales) => {
-                    for (lang, table) in locales {
-                        self.copies.insert(lang, table);
-                    }
+        if let Some(workspace_root) = project_root(params.workspace_folders) {
+            let mut locales_dir = None;
 
-                    // eprintln!("{:?}", self.copies)
+            // Find the first locale folder that exists
+            for locale_dir in LOCALE_DIRS {
+                let workspace_locales_dir = workspace_root.join(locale_dir);
+                if workspace_locales_dir.is_dir() {
+                    locales_dir = Some(workspace_locales_dir);
+                    break;
                 }
-                Err(e) => eprintln!("failed to load translation files: {e}"),
+            }
+
+            if let Some(dir) = locales_dir {
+                match locales::load_files(&dir) {
+                    Ok(locales) => {
+                        for (lang, table) in locales {
+                            self.copies.insert(lang, table);
+                        }
+
+                        // eprintln!("{:?}", self.copies)
+                    }
+                    Err(e) => eprintln!("failed to load translation files: {e}"),
+                }
             }
         }
 
@@ -169,20 +192,19 @@ impl LanguageServer for Backend {
     }
 }
 
-// Builds the path to the locales folder inside the user's project.
-// Takes the first workspace folder Zed sends in `initialize`, turns its
-// URI (file:///...) into a normal path, and joins `locales_directory` onto it.
+// Finds the user's project folder.
+// Takes the first workspace folder Zed sends in `initialize` and turns its
+// URI (file:///...) into a normal path, e.g. /Users/mac/my-app.
 // Returns None if there's no workspace folder or the URI isn't a file path.
-// Note: this only builds the path. It doesn't check that the folder exists;
-// `locales::load_files` will report an error if it doesn't.
-fn locales_dir_path(
-    workspace_folders: Option<Vec<WorkspaceFolder>>,
-    locales_directory: &str,
-) -> Option<PathBuf> {
+// `into_owned()` makes a real copy of the path, because the original lives
+// inside `workspace_folders`, which is thrown away when this function ends.
+// Note: this only finds the project folder. `initialize` then joins each
+// name from `LOCALE_DIRS` onto it to look for the translations folder.
+fn project_root(workspace_folders: Option<Vec<WorkspaceFolder>>) -> Option<PathBuf> {
     let folders = workspace_folders?;
     let folder = folders.first()?;
     let root = folder.uri.to_file_path()?;
-    Some(root.join(locales_directory))
+    Some(root.into_owned())
 }
 
 #[tokio::main]
