@@ -8,4 +8,9 @@ repository = "https://github.com/Benneee/zed_i18n"
 
 [language_servers.i18n-lsp]
 name = "i18n LSP"
-languages = ["TypeScript", "TSX", "JavaScript"]
+languages = [
+    "TypeScript", "TSX", "JavaScript",
+    "Vue.js",
+    "Handlebars", "Glimmer (JavaScript)", "Glimmer (TypeScript)",
+    "Angular", "HTML",
+]
