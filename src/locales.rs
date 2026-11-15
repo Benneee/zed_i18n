@@ -82,3 +82,38 @@ fn flatten_recursive(current: &Value, prefix: String, table: &mut BTreeMap<Strin
         _ => {}
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_is_processed_correctly() {
+        let json = r#"{ "app": { "login": { "title": "Sign in" } } }"#;
+        let table = process_json(json).unwrap();
+
+        assert_eq!(table["app.login.title"], "Sign in");
+    }
+
+    #[test]
+    fn broken_json_is_not_processed() {
+        let json = r#"{ "app": { "welcome": "Welcome" }"#;
+        assert!(process_json(json).is_err());
+    }
+
+    #[test]
+    fn flat_dotted_keys_are_kept() {
+        let json = r#"{ "app.welcome": "Hi" }"#;
+        let table = process_json(json).unwrap();
+
+        assert_eq!(table["app.welcome"], "Hi");
+    }
+
+    #[test]
+    fn loads_every_locale_in_a_folder() {
+        let copies = load_files(Path::new("test-fixtures/locales")).unwrap();
+
+        assert_eq!(copies["en"]["app.welcome"], "Welcome");
+        assert_eq!(copies["fr"]["app.welcome"], "Bienvenue");
+    }
+}

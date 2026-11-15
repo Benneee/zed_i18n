@@ -145,3 +145,83 @@ pub fn is_translation_call(before: &str, after: &str) -> bool {
 
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dot_is_a_key_char() {
+        assert!(is_key_char('.'));
+    }
+
+    #[test]
+    fn recognises_translation_calls() {
+        // (before, after) pairs that SHOULD be recognised
+        let calls = [
+            ("const a = t(\"", "\");"),               // react-i18next, double quotes
+            ("t('", "')"),                            // single quotes
+            ("i18n.t(\"", "\")"),                     // dot before t
+            ("$t('", "')"),                           // vue-i18n
+            ("{{t \"", "\"}}"),                       // ember-intl template
+            ("intl.formatMessage({ id: \"", "\" })"), // react-intl
+            ("formatMessage({ id: \"", "\" })"),      // react-intl
+            ("{{ '", "' | translate }}"),             // Angular pipe
+        ];
+
+        for (before, after) in calls {
+            assert!(is_translation_call(before, after))
+        }
+    }
+
+    #[test]
+    fn rejects_non_translation_calls() {
+        // (before, after) pairs that should NOT be recognised
+        let not_calls = [
+            ("const b = get(\"", "\");"), // "t(" glued to "ge"
+            ("t(\"", "')"),               // quotes don't match
+            ("const a = ", ";"),          // no quotes at all
+        ];
+
+        for (before, after) in not_calls {
+            assert!(
+                !is_translation_call(before, after),
+                "should not match: {before}...{after}"
+            );
+        }
+    }
+
+    #[test]
+    fn finds_the_right_word() {
+        let content = "const a = t(\"app.welcome\");\n";
+        let position = Position {
+            line: 0,
+            character: 14,
+        };
+        let context = get_word_with_surroundings(content, position).unwrap();
+        assert_eq!(context.word, "app.welcome");
+    }
+
+    #[test]
+    fn does_not_find_the_right_word() {
+        let content = "const a = t(\"app.welcome\");\n";
+        let position = Position {
+            line: 0,
+            character: 8,
+        };
+        assert!(get_word_with_surroundings(content, position).is_none());
+    }
+
+    #[test]
+    fn guards_on_utf_characters() {
+        // The emoji counts as 2 LSP characters, so "app.welcome" starts at 15
+        let emoji_content = "🎉 + t(\"app.welcome\");\n";
+        let after_emoji = Position {
+            line: 0,
+            character: 10,
+        };
+
+        let context = get_word_with_surroundings(emoji_content, after_emoji).unwrap();
+        assert_eq!(context.word, "app.welcome");
+    }
+}
